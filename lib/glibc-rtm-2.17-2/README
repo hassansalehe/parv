@@ -1,0 +1,5 @@
+This branch contains the TSX's implentation from
+glibc version 2.17-2 maintained and developed by Andi Kleen.
+
+You can download the whole repository of this version of glibc from: 
+https://github.com/andikleen/glibc/tree/rtm-2.17-2
