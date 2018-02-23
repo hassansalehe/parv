@@ -23,24 +23,21 @@
 //#include "localMems.hpp"
 #include "parv_base.hpp"
 // * Instruments a function a thread executes as its body *
-// * Inserts STM initialization and stm begin transation at the beginning of thread body execution *
-// * Inserts STM finalization and stm end transation at the end so that all the body encapsulated *
+// * Inserts STM initialization and stm begin transation at
+//     the beginning of thread body execution *
+// * Inserts STM finalization and stm end transation at the
+//     end so that all the body encapsulated *
 // * within a transactional context *
-unsigned int love = 0;
-static void SpecialInstruction(const char * type, ADDRINT id)
-{
-  if(id != 0) {
-    //    love = 0;
+static void SpecialInstruction(const char * type, ADDRINT id) {
+  if (id != 0) {
         ///printf("App Alive %u %s\n", id, type); fflush(stdout);
     }
-    //love++;
 }
-static void instrumentThreadBody(ADDRINT functptr)
-{
+static void instrumentThreadBody(ADDRINT functptr) {
     PIN_LockClient();
     map<ADDRINT, ADDRINT>::iterator it = instrumentedFuncs.find(functptr);
     CONTEXT ctct;
-    if(it == instrumentedFuncs.end()) { // is it not instrumented before?
+    if (it == instrumentedFuncs.end()) { // is it not instrumented before?
         printf("THREAD_CREATE\n");  fflush(stdout);
         //register the function
         instrumentedFuncs[functptr] = functptr;
@@ -53,7 +50,7 @@ static void instrumentThreadBody(ADDRINT functptr)
             ;
         //ins = INS_Next(ins);
 
-        if(INS_Valid(ins)) {
+        if (INS_Valid(ins)) {
             // insert context initialization function
             INS_InsertCall(ins, IPOINT_BEFORE, (AFUNPTR)Begin_Consistency,
                     IARG_PTR, "Polka",
@@ -95,7 +92,7 @@ static void instrumentThreadBody(ADDRINT functptr)
 VOID ImageLoad(IMG img, VOID *) {
 
     // this image already loaded?
-    if(pthreadLoaded) return;
+    if (pthreadLoaded) return;
 
     // Instrumenting "main function"
     RTN rtn = RTN_FindByName(img, "__pthread_create_2_1");
@@ -118,8 +115,7 @@ VOID ImageLoad(IMG img, VOID *) {
 
 // * Its a callback run everytime an image is unloaded *
 VOID ImageUnload(IMG img, VOID *) {
-    if(pthreadLoaded && IMG_Id(img) == pthreadIMGID)
-    {
+    if (pthreadLoaded && IMG_Id(img) == pthreadIMGID) {
         pthreadLoaded = false;
         pthreadIMGID = 0;
     }
@@ -127,8 +123,7 @@ VOID ImageUnload(IMG img, VOID *) {
 
 
 // * Its a callback executed to in order to instrument a trace *
-void TraceAnalysisCalls(TRACE trace, void *)
-{
+void TraceAnalysisCalls(TRACE trace, void *) {
     if (!filter.SelectTrace(trace))
         return;
 
@@ -139,36 +134,28 @@ void TraceAnalysisCalls(TRACE trace, void *)
 
             //if ( RTN_Valid(rtn) && IMG_IsMainExecutable( SEC_Img( RTN_Sec(rtn) ) ) )
             //{
-                if( INS_IsOriginal(ins) &&  !INS_IsStackRead(ins) && !INS_IsStackWrite(ins)
+                if ( INS_IsOriginal(ins) &&  !INS_IsStackRead(ins) && !INS_IsStackWrite(ins)
                     && (INS_IsMemoryRead(ins) || INS_IsMemoryWrite(ins) || INS_HasMemoryRead2(ins)) )
                 {
     char * op1;
     char * op2;
 
-    if(INS_OperandIsMemory(ins, 0))
-        op1 = "MEMORY";
-    if(INS_OperandIsReg(ins, 0))
-        op1 = "REG";
-    if(INS_OperandIsImmediate(ins, 0))
-        op1 = "IMMEDIATE";
+    if (INS_OperandIsMemory(ins, 0))       op1 = "MEMORY";
+    if (INS_OperandIsReg(ins, 0))          op1 = "REG";
+    if (INS_OperandIsImmediate(ins, 0))    op1 = "IMMEDIATE";
 
-    if(INS_OperandIsMemory(ins, 1))
-        op2 = "MEMORY";
-    if(INS_OperandIsReg(ins, 1))
-        op2 = "REG";
-    if(INS_OperandIsImmediate(ins, 1))
-        op2 = "IMMEDIATE";
+    if (INS_OperandIsMemory(ins, 1))       op2 = "MEMORY";
+    if (INS_OperandIsReg(ins, 1))          op2 = "REG";
+    if (INS_OperandIsImmediate(ins, 1))    op2 = "IMMEDIATE";
 
-    if (INS_IsMemoryRead(ins))
-    {
+    if (INS_IsMemoryRead(ins)) {
         UINT32 memOperands = INS_OperandCount(ins);
 
-        if(PIN_ThreadId())
+        if (PIN_ThreadId())
         printf("===========REading: %s, %s %u\n", op1, op2, PIN_ThreadId());
 //         else
 //             printf("REading: %s, %s %u\n", op1, op2, PIN_ThreadId());
-        if(INS_OperandIsMemory(ins, 1))
-        {
+        if (INS_OperandIsMemory(ins, 1)) {
 //             INS_InsertCall(ins, IPOINT_BEFORE, AFUNPTR(Sibling_Read),
 //                     IARG_FAST_ANALYSIS_CALL,
 //                     IARG_MEMORYREAD_EA,
@@ -177,28 +164,23 @@ void TraceAnalysisCalls(TRACE trace, void *)
 //                     IARG_END);
 //
 //             INS_RewriteMemoryOperand(ins, 0, REG(REG_INST_G0+0));
-        }
-        else if(INS_OperandIsReg(ins, 0))
-        {
+        } else if (INS_OperandIsReg(ins, 0)) {
 
-        }
-        else {
+        } else {
             INS_InsertCall(ins, IPOINT_BEFORE, AFUNPTR(SpecialInstruction),IARG_PTR, "Reading", IARG_THREAD_ID, IARG_END);
             //printf("(INS_IsMemoryRead(ins))  UNHANDLED MEMORY UNHANDLED MEMORY UNHANDLED MEMORY op1:%s  op2:%s\n", op1, op2); fflush(stdout);
             // A special memory read operation. It may relate to stack read operations
         }
     }
-    if (INS_IsMemoryWrite(ins))
-    {
+    if (INS_IsMemoryWrite(ins)) {
         UINT32 memOperands = INS_OperandCount(ins);
 
-        if(PIN_ThreadId())
+        if (PIN_ThreadId())
         printf("~~~~~~~~~~~~~~~~~WRiting: %s, %s %u\n", op1, op2, PIN_ThreadId());
 
         ADDRINT op_2;
 
-        if(INS_OperandIsImmediate(ins, 1))
-        {
+        if (INS_OperandIsImmediate(ins, 1)) {
 //             op_2 = (ADDRINT)INS_OperandImmediate(ins, 1);
 //             INS_InsertCall(ins, IPOINT_BEFORE , AFUNPTR(Sibling_Write),
 //                     IARG_FAST_ANALYSIS_CALL,
@@ -208,10 +190,7 @@ void TraceAnalysisCalls(TRACE trace, void *)
 //
 //             INS_InsertDirectJump(ins, IPOINT_BEFORE, INS_NextAddress(ins));
 
-        }
-
-        else if (INS_OperandIsReg(ins, 1))
-        {
+        } else if (INS_OperandIsReg(ins, 1)) {
             //op_2 = ;
 //                             INS_InsertCall(ins, IPOINT_BEFORE, AFUNPTR(Sibling_Write),
 //                                     IARG_FAST_ANALYSIS_CALL,
@@ -220,10 +199,7 @@ void TraceAnalysisCalls(TRACE trace, void *)
 //                                     IARG_END);
 //
 //                             INS_InsertDirectJump(ins, IPOINT_BEFORE, INS_NextAddress(ins));
-        }
-
-        else if(INS_OperandIsMemory(ins, 1))
-        {
+        } else if (INS_OperandIsMemory(ins, 1)) {
 //                             INS_InsertCall(ins, IPOINT_BEFORE, AFUNPTR(Sibling_Write),
 //                                     IARG_FAST_ANALYSIS_CALL,
 //                                     IARG_MEMORYWRITE_EA,
@@ -231,27 +207,24 @@ void TraceAnalysisCalls(TRACE trace, void *)
 //                                     IARG_END);
 //
 //                             INS_InsertDirectJump(ins, IPOINT_BEFORE, INS_NextAddress(ins));
-        }
-        else {
+        } else {
             INS_InsertCall(ins, IPOINT_BEFORE, AFUNPTR(SpecialInstruction), IARG_PTR, "Writing", IARG_THREAD_ID, IARG_END);
             //printf("(INS_IsMemoryWrite(ins)) UNHANDLED MEMORY UNHANDLED MEMORY UNHANDLED MEMORY\n"); fflush(stdout);
         }
         //INS_InsertDirectJump(ins, IPOINT_BEFORE, INS_NextAddress(ins));
     }
-    if (INS_HasMemoryRead2(ins))
-    {
+    if (INS_HasMemoryRead2(ins)) {
         INS_InsertCall(ins, IPOINT_BEFORE, AFUNPTR(SpecialInstruction), IARG_THREAD_ID, IARG_END);
         //printf(" (INS_HasMemoryRead2(ins)) UNHANDLED MEMORY UNHANDLED MEMORY UNHANDLED MEMORY\n"); fflush(stdout);
     }
-}
+  }
             //}
         }
     }
 }
 
 
-VOID Fini(INT32 code, VOID *v)
-{
+VOID Fini(INT32 code, VOID *v) {
     //ShutDownStm();
 }
 
@@ -261,17 +234,12 @@ int main(int argc, char * argv[]) {
     if (PIN_Init(argc, argv)) return -1;
 
     PIN_InitSymbols();
-
     PIN_AddFiniFunction(Fini, 0);
-
     IMG_AddInstrumentFunction(ImageLoad, 0);
-
     IMG_AddUnloadFunction(ImageUnload, 0);
-
     TRACE_AddInstrumentFunction(TraceAnalysisCalls, 0);
 
     filter.Activate();
-
 //     int myStdoutFd = dup(1);
 //     int myStderrFd = dup(2);
 //     int nullFd = open ("/home/hmatar/jambazi.txt",  O_RSYNC | O_RDWR  );
@@ -279,7 +247,6 @@ int main(int argc, char * argv[]) {
 //     printf("We love you\n");
 //     dup2(nullFd, 1);
 //     dup2(nullFd, 2);
-//
 
     PIN_StartProgram();
 
